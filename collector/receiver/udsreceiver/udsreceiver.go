@@ -66,8 +66,8 @@ type ZeroMqReqSettings struct {
 func (r *UdsReceiver) newPullSocket(zss *ZeroMqPullSettings) Socket {
 
 	zmqContextServer, err := zmq.NewContext()
-	fmt.Println("[newPullSocket] err:" + err.Error())
 	if err != nil {
+		fmt.Println("[newPullSocket] err:" + err.Error())
 		panic("[newPullSocket] NewContext for zmq failed. e:" + err.Error())
 	}
 	ServerClient, _ := zmqContextServer.NewSocket(zmq.PULL)
@@ -78,7 +78,11 @@ func (r *UdsReceiver) newPullSocket(zss *ZeroMqPullSettings) Socket {
 }
 
 func (r *UdsReceiver) newReqSocket(zss *ZeroMqReqSettings) Socket {
-	zmqContextServer, _ := zmq.NewContext()
+	zmqContextServer, err := zmq.NewContext()
+	if err != nil {
+		fmt.Println("[newReqSocket] err:" + err.Error())
+		panic("[newReqSocket] NewContext for zmq failed. e:" + err.Error())
+	}
 	ServerClient, _ := zmqContextServer.NewSocket(zmq.REQ)
 	if zss.hwm != 0 {
 		ServerClient.SetSndhwm(zss.hwm)

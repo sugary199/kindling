@@ -124,7 +124,7 @@ func onAdd(obj interface{}) {
 	workloadNameTmp := ""
 
 	// 先默认从pod的Labels中取
-	armsEnable := pod.Labels["ArmsAppEnable"] != ArmsAppDisabled
+	armsEnable := pod.Labels["ArmsAppEnable"] == ArmsAppEnabled
 	armsAppName := pod.Labels[ArmsAppName]
 
 	for _, owner := range pod.OwnerReferences {
@@ -142,10 +142,15 @@ func onAdd(obj interface{}) {
 				workloadNameTmp = workload.Name
 				// 如果ReplicaSet中有配置Arms相关参数，则覆盖Pod的配置
 				if enabled, ok := workload.Labels[ArmsAppEnable]; ok {
-					armsEnable = enabled != ArmsAppDisabled
+					armsEnable = enabled == ArmsAppEnabled
+				} else {
+					fmt.Printf("[qianlu] not found armsAppEnable labels. workloadName:%v, labels:%v", workload.Name, workload.Labels)
 				}
 				if appName, ok := workload.Labels[ArmsAppName]; ok {
+					fmt.Println("[qianlu] found armsAppName labels. workloadName: " + workload.Name +" appName:" + appName)
 					armsAppName = appName
+				} else {
+					fmt.Printf("[qianlu] not found armsAppName labels. workloadName:%v, labels:%v", workload.Name, workload.Labels)
 				}
 				break
 			}
@@ -171,9 +176,21 @@ func onAdd(obj interface{}) {
 		// Only one of the matched services is cared, here we get the first one
 		serviceInfo = serviceInfoSlice[0]
 	}
+	appId := ""
+	if armsEnable {
+		if id, err := GetAppIdByAppName(armsAppName); err != nil {
+			fmt.Println("[qianlu] GetAppIdByAppName error for" + err.Error())
+		} else {
+			fmt.Println("[qianlu] GetAppIdByAppName pod:" + pod.Name + " app_id:" + id)
+			appId = id
+		}
+	} else {
+		fmt.Println("[qianlu] armsAppName is no enable, pod:" + pod.Name)
+	}
 	armsInfo := &ArmsInfo{
 		AppName: armsAppName,
 		Enable:  armsEnable,
+		AppId: appId,
 	}
 	var kpi = &K8sPodInfo{
 		Ip:            pod.Status.PodIP,
