@@ -24,7 +24,7 @@ const(
 
 type ReplicaSetMap struct {
 	// Key is ${namespace}/${name}
-	Info map[string]ReplicaSetInfo
+	Info map[string]*ReplicaSetInfo
 	mut  sync.RWMutex
 }
 
@@ -32,7 +32,7 @@ var globalRsInfo = newReplicaSetMap()
 var rsUpdateMutex sync.Mutex
 
 type ReplicaSetInfo struct {
-	Controller
+	*Controller
 	Labels map[string]string
 }
 
@@ -44,17 +44,17 @@ type Controller struct {
 
 func newReplicaSetMap() *ReplicaSetMap {
 	return &ReplicaSetMap{
-		Info: make(map[string]ReplicaSetInfo),
+		Info: make(map[string]*ReplicaSetInfo),
 	}
 }
 
-func (rs *ReplicaSetMap) put(key string, rsi ReplicaSetInfo) {
+func (rs *ReplicaSetMap) put(key string, rsi *ReplicaSetInfo) {
 	rs.mut.Lock()
 	rs.Info[key] = rsi
 	rs.mut.Unlock()
 }
 
-func (rs *ReplicaSetMap) GetReplicaSetInfo(key string) (ReplicaSetInfo, bool) {
+func (rs *ReplicaSetMap) GetReplicaSetInfo(key string) (*ReplicaSetInfo, bool) {
 	rs.mut.RLock()
 	result, ok := rs.Info[key]
 	rs.mut.RUnlock()
@@ -98,12 +98,12 @@ func onAddReplicaSet(obj interface{}) {
 	if ownerRef == nil {
 		return
 	}
-	controller := Controller{
+	controller := &Controller{
 		Name:       ownerRef.Name,
 		Kind:       ownerRef.Kind,
 		APIVersion: ownerRef.APIVersion,
 	}
-	replicaSetInfo := ReplicaSetInfo{
+	replicaSetInfo := &ReplicaSetInfo{
 		Controller: controller,
 		Labels:     rs.Labels,
 	}
@@ -126,4 +126,8 @@ func OnUpdateReplicaSet(objOld interface{}, objNew interface{}) {
 func onDeleteReplicaSet(obj interface{}) {
 	rs := obj.(*appv1.ReplicaSet)
 	globalRsInfo.deleteOwnerReference(mapKey(rs.Namespace, rs.Name))
+}
+
+func createArmsApp(appId, language string) error {
+	return nil
 }
