@@ -83,8 +83,9 @@ func init() {
 	appName2appId = make(map[string]string)
 	if uid, ok := os.LookupEnv(userIdEnvKey); ok {
 		userId = uid
+		fmt.Println("uid:" + uid)
 		userIdLong, err := strconv.ParseInt(userId, 10, 64)
-		if err == nil {
+		if err != nil {
 			panic("Parse user_id to long type error. user_id:" + userId + " e:" + err.Error())
 		}
 		userIdBase36 = strconv.FormatInt(userIdLong, 36)
