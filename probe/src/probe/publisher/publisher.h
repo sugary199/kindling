@@ -5,7 +5,7 @@
 #include "src/probe/publisher/subscribe.pb.h"
 #include "src/probe/converter/converter.h"
 #include "src/probe/utils/shared_unordered_map.h"
-#include "src/userspace/libsinsp/sinsp.h"
+#include "sinsp.h"
 #include "src/probe/converter/uprobe_converter.h"
 
 #include <src/common/base/base.h>
@@ -19,7 +19,7 @@ typedef void * Socket;
 
 class selector {
 public:
-    selector();
+    selector(sinsp *inspector);
     bool select(uint16_t type, Category category);
     void parse(const google::protobuf::RepeatedPtrField<::kindling::Label> &field);
 
@@ -28,6 +28,7 @@ private:
     map<string, ppm_event_type> m_events;
     map<string, Category> m_categories;
     Category get_category(string category);
+    sinsp *m_inspector;
 };
 
 // publish kindling event

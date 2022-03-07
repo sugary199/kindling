@@ -37,6 +37,7 @@ type NetworkAnalyzer struct {
 	protocolMap      map[string]*protocol.ProtocolParser
 	parsers          []*protocol.ProtocolParser
 
+	gaugeGroupPool *GaugeGroupPool
 	requestMonitor sync.Map
 	telemetry      *component.TelemetryTools
 }
@@ -44,9 +45,10 @@ type NetworkAnalyzer struct {
 func NewNetworkAnalyzer(cfg interface{}, telemetry *component.TelemetryTools, consumers []consumer.Consumer) analyzer.Analyzer {
 	config, _ := cfg.(*Config)
 	return &NetworkAnalyzer{
-		cfg:           config,
-		nextConsumers: consumers,
-		telemetry:     telemetry,
+		cfg:            config,
+		gaugeGroupPool: NewGaugePool(),
+		nextConsumers:  consumers,
+		telemetry:      telemetry,
 	}
 }
 
@@ -146,7 +148,7 @@ func (na *NetworkAnalyzer) ConsumeEvent(evt *model.KindlingEvent) error {
 }
 
 func (na *NetworkAnalyzer) consumerFdNoReusingTrace() {
-	timer := time.NewTicker(5 * time.Second)
+	timer := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-timer.C:
@@ -278,6 +280,7 @@ func (na *NetworkAnalyzer) distributeTraceMetric(oldPairs *messagePairs, newPair
 		for _, nexConsumer := range na.nextConsumers {
 			nexConsumer.Consume(record)
 		}
+		na.gaugeGroupPool.Free(record)
 	}
 	return nil
 }
@@ -289,7 +292,7 @@ func (na *NetworkAnalyzer) parseProtocols(mps *messagePairs) []*model.GaugeGroup
 	if found {
 		if mps.requests == nil {
 			// Connect Timeout
-			return na.getConnectFailRecords(mps, staticProtocol)
+			return na.getConnectFailRecords(mps)
 		}
 
 		if parser, exist := na.protocolMap[staticProtocol]; exist {
@@ -306,7 +309,7 @@ func (na *NetworkAnalyzer) parseProtocols(mps *messagePairs) []*model.GaugeGroup
 
 	if mps.requests == nil {
 		// Connect Timeout
-		return na.getConnectFailRecords(mps, protocol.GENERIC)
+		return na.getConnectFailRecords(mps)
 	}
 
 	// Step2 Cache protocol and port
@@ -316,7 +319,7 @@ func (na *NetworkAnalyzer) parseProtocols(mps *messagePairs) []*model.GaugeGroup
 		for _, parser := range cacheParsers {
 			records := na.parseProtocol(mps, parser)
 			if records != nil {
-				if protocol.GENERIC == parser.GetProtocol() {
+				if protocol.NOSUPPORT == parser.GetProtocol() {
 					// Reset mapping for  generic and port when exceed threshold so as to parsed by other protcols.
 					if parser.AddPortCount(port) == CACHE_RESET_THRESHOLD {
 						parser.ResetPort(port)
@@ -339,7 +342,7 @@ func (na *NetworkAnalyzer) parseProtocols(mps *messagePairs) []*model.GaugeGroup
 			return records
 		}
 	}
-	return na.getRecords(mps, protocol.GENERIC, nil)
+	return na.getRecords(mps, protocol.NOSUPPORT, nil)
 }
 
 func (na *NetworkAnalyzer) parseProtocol(mps *messagePairs, parser *protocol.ProtocolParser) []*model.GaugeGroup {
@@ -428,31 +431,25 @@ func (na *NetworkAnalyzer) parseProtocol(mps *messagePairs, parser *protocol.Pro
 	return na.getRecords(mps, parser.GetProtocol(), responseMsg.GetAttributes())
 }
 
-func (na *NetworkAnalyzer) getConnectFailRecords(mps *messagePairs, protocol string) []*model.GaugeGroup {
+func (na *NetworkAnalyzer) getConnectFailRecords(mps *messagePairs) []*model.GaugeGroup {
 	evt := mps.connects.event
-	return []*model.GaugeGroup{
-		{
-			Values: []model.Gauge{
-				{Name: constvalues.ConnectTime, Value: int64(mps.connects.getDuration())},
-				{Name: constvalues.RequestTotalTime, Value: int64(mps.connects.getDuration())},
-			},
-			Labels: model.NewAttributeMapWithValues(map[string]model.AttributeValue{
-				constlabels.Pid:         model.NewIntValue(int64(evt.GetPid())),
-				constlabels.SrcIp:       model.NewStringValue(evt.GetSip()),
-				constlabels.DstIp:       model.NewStringValue(evt.GetDip()),
-				constlabels.SrcPort:     model.NewIntValue(int64(evt.GetSport())),
-				constlabels.DstPort:     model.NewIntValue(int64(evt.GetDport())),
-				constlabels.DnatIp:      model.NewStringValue(constlabels.STR_EMPTY),
-				constlabels.DnatPort:    model.NewIntValue(-1),
-				constlabels.ContainerId: model.NewStringValue(evt.GetContainerId()[:]),
-				constlabels.IsError:     model.NewBoolValue(true),
-				constlabels.ErrorType:   model.NewIntValue(int64(constlabels.ConnectFail)),
-				constlabels.IsSlow:      model.NewBoolValue(false),
-				constlabels.IsServer:    model.NewBoolValue(evt.GetCtx().GetFdInfo().Role),
-			}),
-			Timestamp: evt.GetStartTime(),
-		},
-	}
+	ret := na.gaugeGroupPool.Get()
+	ret.UpdateAddGauge(constvalues.ConnectTime, int64(mps.connects.getDuration()))
+	ret.UpdateAddGauge(constvalues.RequestTotalTime, int64(mps.connects.getDuration()))
+	ret.Labels.UpdateAddIntValue(constlabels.Pid, int64(evt.GetPid()))
+	ret.Labels.UpdateAddStringValue(constlabels.SrcIp, evt.GetSip())
+	ret.Labels.UpdateAddStringValue(constlabels.DstIp, evt.GetDip())
+	ret.Labels.UpdateAddIntValue(constlabels.SrcPort, int64(evt.GetSport()))
+	ret.Labels.UpdateAddIntValue(constlabels.DstPort, int64(evt.GetDport()))
+	ret.Labels.UpdateAddStringValue(constlabels.DnatIp, constlabels.STR_EMPTY)
+	ret.Labels.UpdateAddIntValue(constlabels.DnatPort, -1)
+	ret.Labels.UpdateAddStringValue(constlabels.ContainerId, evt.GetContainerId())
+	ret.Labels.UpdateAddBoolValue(constlabels.IsError, true)
+	ret.Labels.UpdateAddIntValue(constlabels.ErrorType, int64(constlabels.ConnectFail))
+	ret.Labels.UpdateAddBoolValue(constlabels.IsSlow, false)
+	ret.Labels.UpdateAddBoolValue(constlabels.IsServer, evt.GetCtx().GetFdInfo().Role)
+	ret.Timestamp = evt.GetStartTime()
+	return []*model.GaugeGroup{ret}
 }
 
 func (na *NetworkAnalyzer) getRecords(mps *messagePairs, protocol string, attributes *model.AttributeMap) []*model.GaugeGroup {
@@ -463,100 +460,89 @@ func (na *NetworkAnalyzer) getRecords(mps *messagePairs, protocol string, attrib
 		slow = na.isSlow(mps.getDuration(), protocol)
 	}
 
-	labels := model.NewAttributeMapWithValues(map[string]model.AttributeValue{
-		constlabels.Pid:         model.NewIntValue(int64(evt.GetPid())),
-		constlabels.SrcIp:       model.NewStringValue(evt.GetSip()),
-		constlabels.DstIp:       model.NewStringValue(evt.GetDip()),
-		constlabels.SrcPort:     model.NewIntValue(int64(evt.GetSport())),
-		constlabels.DstPort:     model.NewIntValue(int64(evt.GetDport())),
-		constlabels.DnatIp:      model.NewStringValue(constlabels.STR_EMPTY),
-		constlabels.DnatPort:    model.NewIntValue(-1),
-		constlabels.ContainerId: model.NewStringValue(evt.GetContainerId()[:]),
-		constlabels.IsSlow:      model.NewBoolValue(slow),
-		constlabels.IsServer:    model.NewBoolValue(evt.GetCtx().GetFdInfo().Role),
-		constlabels.Protocol:    model.NewStringValue(protocol),
-	})
+	ret := na.gaugeGroupPool.Get()
+	labels := ret.Labels
+	labels.UpdateAddIntValue(constlabels.Pid, int64(evt.GetPid()))
+	labels.UpdateAddStringValue(constlabels.SrcIp, evt.GetSip())
+	labels.UpdateAddStringValue(constlabels.DstIp, evt.GetDip())
+	labels.UpdateAddIntValue(constlabels.SrcPort, int64(evt.GetSport()))
+	labels.UpdateAddIntValue(constlabels.DstPort, int64(evt.GetDport()))
+	labels.UpdateAddStringValue(constlabels.DnatIp, constlabels.STR_EMPTY)
+	labels.UpdateAddIntValue(constlabels.DnatPort, -1)
+	labels.UpdateAddStringValue(constlabels.ContainerId, evt.GetContainerId())
+	labels.UpdateAddBoolValue(constlabels.IsError, false)
+	labels.UpdateAddIntValue(constlabels.ErrorType, int64(constlabels.NoError))
+	labels.UpdateAddBoolValue(constlabels.IsSlow, slow)
+	labels.UpdateAddBoolValue(constlabels.IsServer, evt.GetCtx().GetFdInfo().Role)
+	labels.UpdateAddStringValue(constlabels.Protocol, protocol)
 
 	labels.Merge(attributes)
-	if !labels.HasAttribute(constlabels.IsError) {
-		if mps.responses == nil {
-			labels.AddBoolValue(constlabels.IsError, true)
-			labels.AddIntValue(constlabels.ErrorType, int64(constlabels.NoResponse))
-		} else {
-			labels.AddBoolValue(constlabels.IsError, false)
-			labels.AddIntValue(constlabels.ErrorType, int64(constlabels.NoError))
-		}
+	// If no protocol error found, we check other errors
+	if !labels.GetBoolValue(constlabels.IsError) && mps.responses == nil {
+		labels.AddBoolValue(constlabels.IsError, true)
+		labels.AddIntValue(constlabels.ErrorType, int64(constlabels.NoResponse))
 	}
 
 	if nil != mps.natTuple && mps.responses != nil {
-		labels.AddStringValue(constlabels.DnatIp, mps.natTuple.ReplSrcIP.String())
-		labels.AddIntValue(constlabels.DnatPort, int64(mps.natTuple.ReplSrcPort))
+		labels.UpdateAddStringValue(constlabels.DnatIp, mps.natTuple.ReplSrcIP.String())
+		labels.UpdateAddIntValue(constlabels.DnatPort, int64(mps.natTuple.ReplSrcPort))
 	}
 
-	return []*model.GaugeGroup{
-		{
-			Values: []model.Gauge{
-				{Name: constvalues.ConnectTime, Value: int64(mps.getConnectDuration())},
-				{Name: constvalues.RequestSentTime, Value: mps.getSentTime()},
-				{Name: constvalues.WaitingTtfbTime, Value: mps.getWaitingTime()},
-				{Name: constvalues.ContentDownloadTime, Value: mps.getDownloadTime()},
-				{Name: constvalues.RequestTotalTime, Value: int64(mps.getConnectDuration() + mps.getDuration())},
-				{Name: constvalues.RequestIo, Value: int64(mps.getRquestSize())},
-				{Name: constvalues.ResponseIo, Value: int64(mps.getResponseSize())},
-			},
-			Labels:    labels,
-			Timestamp: evt.GetStartTime(),
-		},
-	}
+	ret.UpdateAddGauge(constvalues.ConnectTime, int64(mps.getConnectDuration()))
+	ret.UpdateAddGauge(constvalues.RequestSentTime, mps.getSentTime())
+	ret.UpdateAddGauge(constvalues.WaitingTtfbTime, mps.getWaitingTime())
+	ret.UpdateAddGauge(constvalues.ContentDownloadTime, mps.getDownloadTime())
+	ret.UpdateAddGauge(constvalues.RequestTotalTime, int64(mps.getConnectDuration()+mps.getDuration()))
+	ret.UpdateAddGauge(constvalues.RequestIo, int64(mps.getRquestSize()))
+	ret.UpdateAddGauge(constvalues.ResponseIo, int64(mps.getResponseSize()))
+
+	ret.Timestamp = evt.GetStartTime()
+
+	return []*model.GaugeGroup{ret}
 }
 
 func (na *NetworkAnalyzer) getRecord(mps *messagePairs, mp *messagePair, protocol string, attributes *model.AttributeMap) *model.GaugeGroup {
 	evt := mp.request
 
 	slow := na.isSlow(mp.getDuration(), protocol)
-	labels := model.NewAttributeMapWithValues(map[string]model.AttributeValue{
-		constlabels.Pid:         model.NewIntValue(int64(evt.GetPid())),
-		constlabels.SrcIp:       model.NewStringValue(evt.GetSip()),
-		constlabels.DstIp:       model.NewStringValue(evt.GetDip()),
-		constlabels.SrcPort:     model.NewIntValue(int64(evt.GetSport())),
-		constlabels.DstPort:     model.NewIntValue(int64(evt.GetDport())),
-		constlabels.DnatIp:      model.NewStringValue(constlabels.STR_EMPTY),
-		constlabels.DnatPort:    model.NewIntValue(-1),
-		constlabels.ContainerId: model.NewStringValue(evt.GetContainerId()[:]),
-		constlabels.IsSlow:      model.NewBoolValue(slow),
-		constlabels.IsServer:    model.NewBoolValue(evt.GetCtx().GetFdInfo().Role),
-		constlabels.Protocol:    model.NewStringValue(protocol),
-	})
+	ret := na.gaugeGroupPool.Get()
+	labels := ret.Labels
+	labels.UpdateAddIntValue(constlabels.Pid, int64(evt.GetPid()))
+	labels.UpdateAddStringValue(constlabels.SrcIp, evt.GetSip())
+	labels.UpdateAddStringValue(constlabels.DstIp, evt.GetDip())
+	labels.UpdateAddIntValue(constlabels.SrcPort, int64(evt.GetSport()))
+	labels.UpdateAddIntValue(constlabels.DstPort, int64(evt.GetDport()))
+	labels.UpdateAddStringValue(constlabels.DnatIp, constlabels.STR_EMPTY)
+	labels.UpdateAddIntValue(constlabels.DnatPort, -1)
+	labels.UpdateAddStringValue(constlabels.ContainerId, evt.GetContainerId())
+	labels.UpdateAddBoolValue(constlabels.IsError, false)
+	labels.UpdateAddIntValue(constlabels.ErrorType, int64(constlabels.NoError))
+	labels.UpdateAddBoolValue(constlabels.IsSlow, slow)
+	labels.UpdateAddBoolValue(constlabels.IsServer, evt.GetCtx().GetFdInfo().Role)
+	labels.UpdateAddStringValue(constlabels.Protocol, protocol)
 
 	labels.Merge(attributes)
-	if !labels.HasAttribute(constlabels.IsError) {
-		if mp.response == nil {
-			labels.AddBoolValue(constlabels.IsError, true)
-			labels.AddIntValue(constlabels.ErrorType, int64(constlabels.NoResponse))
-		} else {
-			labels.AddBoolValue(constlabels.IsError, false)
-			labels.AddIntValue(constlabels.ErrorType, int64(constlabels.NoError))
-		}
+	// If no protocol error found, we check other errors
+	if !labels.GetBoolValue(constlabels.IsError) && mps.responses == nil {
+		labels.AddBoolValue(constlabels.IsError, true)
+		labels.AddIntValue(constlabels.ErrorType, int64(constlabels.NoResponse))
 	}
 
 	if nil != mps.natTuple && mps.responses != nil {
-		labels.AddStringValue(constlabels.DnatIp, mps.natTuple.ReplSrcIP.String())
-		labels.AddIntValue(constlabels.DnatPort, int64(mps.natTuple.ReplSrcPort))
+		labels.UpdateAddStringValue(constlabels.DnatIp, mps.natTuple.ReplSrcIP.String())
+		labels.UpdateAddIntValue(constlabels.DnatPort, int64(mps.natTuple.ReplSrcPort))
 	}
 
-	return &model.GaugeGroup{
-		Values: []model.Gauge{
-			{Name: constvalues.ConnectTime, Value: 0},
-			{Name: constvalues.RequestSentTime, Value: mp.getSentTime()},
-			{Name: constvalues.WaitingTtfbTime, Value: mp.getWaitingTime()},
-			{Name: constvalues.ContentDownloadTime, Value: mp.getDownloadTime()},
-			{Name: constvalues.RequestTotalTime, Value: int64(mp.getDuration())},
-			{Name: constvalues.RequestIo, Value: int64(mp.getRquestSize())},
-			{Name: constvalues.ResponseIo, Value: int64(mp.getResponseSize())},
-		},
-		Labels:    labels,
-		Timestamp: evt.GetStartTime(),
-	}
+	ret.UpdateAddGauge(constvalues.ConnectTime, 0)
+	ret.UpdateAddGauge(constvalues.RequestSentTime, mps.getSentTime())
+	ret.UpdateAddGauge(constvalues.WaitingTtfbTime, mps.getWaitingTime())
+	ret.UpdateAddGauge(constvalues.ContentDownloadTime, mps.getDownloadTime())
+	ret.UpdateAddGauge(constvalues.RequestTotalTime, int64(mps.getDuration()))
+	ret.UpdateAddGauge(constvalues.RequestIo, int64(mps.getRquestSize()))
+	ret.UpdateAddGauge(constvalues.ResponseIo, int64(mps.getResponseSize()))
+
+	ret.Timestamp = evt.GetStartTime()
+	return ret
 }
 
 func (na *NetworkAnalyzer) isSlow(duration uint64, protocol string) bool {

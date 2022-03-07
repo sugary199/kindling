@@ -5,12 +5,12 @@ import './topology/node';
 import './topology/edge';
 import { formatTime, formatCount, formatKMBT, formatPercent, nodeTooltip } from './topology/tooltip';
 import TopoLegend from './topology/legend';
-import { NodeDataProps, EdgeDataProps, nsRelationHandle, detailRelationHandle, detailNodesHandle, detailEdgesHandle } from './topology/services'; 
+import { metricList, directionOptions, viewRadioOptions, showServiceOptions, 
+  NodeDataProps, EdgeDataProps, nsRelationHandle, detailRelationHandle, detailNodesHandle, detailEdgesHandle } from './topology/services'; 
 import { PanelProps } from '@grafana/data';
 import { SimpleOptions } from 'types';
 import { css, cx } from 'emotion';
-import { stylesFactory, Select, Checkbox, RadioButtonGroup } from '@grafana/ui';
-// ErrorBoundary, Alert, 
+import { stylesFactory, Select, RadioButtonGroup, Icon, Tooltip } from '@grafana/ui';
 
 interface VolumeProps {
   maxSentVolume: number; 
@@ -18,19 +18,6 @@ interface VolumeProps {
   minSentVolume: number; 
   minReceiveVolume: number;
 }
-const meetricList: Array<{label: string; value: any; description?: string}> = [
-  { label: 'Latency', value: 'latency' },
-  { label: 'Calls', value: 'calls' },
-  { label: 'Error Rate', value: 'errorRate' },
-  { label: 'Sent Volume', value: 'sentVolume' },
-  { label: 'Receive Volume', value: 'receiveVolume' },
-  { label: 'RTT', value: 'rtt' },
-  { label: 'Retransmit', value: 'retransmit' }
-];
-const viewRadioOptions = [
-  { label: 'Workload', value: 'workload_view' },
-  { label: 'Pod', value: 'pod_view' }
-];
 
 let SGraph: any;
 let topoData: any, nodeData: NodeDataProps, edgeData: EdgeDataProps;
@@ -43,20 +30,22 @@ export const TopologyPanel: React.FC<Props> = ({ options, data, width, height, r
   const styles = getStyles();
   const [showCheckbox, setShowCheckbox] = useState<boolean>(namespace.split(',').length === 1);
   const [showService, setShowService] = useState<boolean>(false);
-  const [showView, setShowView] = useState<boolean>(workload.split(',').length === 1);
+  const [showView, setShowView] = useState<boolean>(false);
+  const [firstChangeDir, setFirstChangeDir] = useState<boolean>(false);
+  const [direction, setDirection] = useState<string>('LR');
   const [view, setView] = useState<string>('workload_view');
   const [lineMetric, setLineMetric] = useState<any>('latency');
   const [volumes, setVolumes] = useState<VolumeProps>({maxSentVolume: 0, maxReceiveVolume: 0, minSentVolume: 0, minReceiveVolume: 0});
   const [nodeTypesList, setNodeTypesList] = useState<any[]>([]);
 
-  // console.log(namespace, workload);
+  // console.log(options, namespace, workload, width, height);
   // console.log(data);
 
   // 当勾选View Service Call时，显示service的调用边，两个节点之间存在多条调用关系，使用弧线绘制对应的调用关系
-  const serviceLineUpdate = () => {
+  const serviceLineUpdate = (dir = direction) => {
     let activeList: any[] = [];
     const edges = SGraph.getEdges();
-    const arc = 30;
+    const offest = 5;
     edges.forEach((edge: any) => {
       let edgeModel = edge.getModel();
       let active = activeList.findIndex((item: any) => (item.source === edgeModel.source && item.target === edgeModel.target) || (item.source === edgeModel.target && item.target === edgeModel.source));
@@ -72,18 +61,31 @@ export const TopologyPanel: React.FC<Props> = ({ options, data, width, height, r
         if (lines.length > 1) {
           let oddNum = 0, evenNum = 0;
           lines.forEach((item: any, idx: number) => {
-            let line: any = item.getModel();
-            line.type = 'service-edge2';
+            let line: any = item.getContainer();
+            // line.type = 'service-edge2';
             let curveOffset = 0;
+            // if (idx % 2 === 0) {
+            //   curveOffset = arc * (1 + (1 * evenNum));
+            //   evenNum ++;
+            // } else {
+            //   curveOffset = -arc * (1 + (1 * oddNum));
+            //   oddNum ++;
+            // }
+            // console.log(item, curveOffset)
+            // line.curveOffset = curveOffset;
+            // SGraph.updateItem(item, line);
             if (idx % 2 === 0) {
-              curveOffset = arc * (1 + (1 * evenNum));
+              curveOffset = -offest * (1 + (1 * evenNum));
               evenNum ++;
             } else {
-              curveOffset = -arc * (1 + (1 * oddNum));
+              curveOffset = offest * (1 + (1 * oddNum));
               oddNum ++;
             }
-            line.curveOffset = curveOffset;
-            SGraph.updateItem(item, line);
+            if (dir === 'TB') {
+              line.translate(curveOffset, 0);
+            } else {
+              line.translate(0, curveOffset);
+            }
           });
         }
       }
@@ -99,10 +101,10 @@ export const TopologyPanel: React.FC<Props> = ({ options, data, width, height, r
         let color: string;
         
         if (metric === 'latency') {
-          color = edgeModel.latency > 1000 ? '#ff4c4c' : (edgeModel.latency > 200 ? '#f3ff69' : '#C2C8D5');
+          color = edgeModel.latency > options.abnormalLatency ? '#ff4c4c' : (edgeModel.latency > options.normalLatency ? '#f3ff69' : '#C2C8D5');
           edgeModel.label = formatTime(edgeModel.latency);
         } else if (metric === 'rtt') {
-          color = edgeModel.rtt > 200 ? '#ff4c4c' : (edgeModel.rtt > 100 ? '#f3ff69' : '#C2C8D5');
+          color = edgeModel.rtt > options.abnormalRtt ? '#ff4c4c' : (edgeModel.rtt > options.normalRtt ? '#f3ff69' : '#C2C8D5');
           edgeModel.label = formatTime(edgeModel.latency);
         } else {
           color = edgeModel.errorRate > 0 ? '#ff4c4c' : '#C2C8D5';
@@ -119,7 +121,7 @@ export const TopologyPanel: React.FC<Props> = ({ options, data, width, height, r
       nodes.forEach((node: any) => {
         let nodeModel = node.getModel();
         if (metric === 'latency') {
-          nodeModel.status = nodeModel.latency > 1000 ? 'red' : (nodeModel.latency > 200 ? 'yellow' : 'green');
+          nodeModel.status = nodeModel.latency > options.abnormalLatency ? 'red' : (nodeModel.latency > options.normalLatency ? 'yellow' : 'green');
         } else if (metric === 'rtt') {
           nodeModel.status = 'green';
         } else {
@@ -197,8 +199,12 @@ export const TopologyPanel: React.FC<Props> = ({ options, data, width, height, r
     const graph = new G6.Graph({
       // renderer: 'svg',
       container: 'kindling_topo',
-      width: width,
+      width: width - 240,
       height: height,
+      fitView: true,
+      fitViewPadding: 10,
+      maxZoom: 1.5,
+      minZoom: 0.25,
       fitCenter: true,
       autoPaint: false,
       plugins: [nodeTooltip],
@@ -209,16 +215,15 @@ export const TopologyPanel: React.FC<Props> = ({ options, data, width, height, r
             enableOptimize: true,
           }, {
             type: 'zoom-canvas',
-            maxZoom: 1.8,
-            minZoom: 0.4
+            maxZoom: 1.5,
+            minZoom: 0.25
           }, 
           'drag-node'
         ]
       },
       layout: {
         type: 'dagre',
-        // rankdir: 'TB',
-        rankdir: 'LR',
+        rankdir: direction,
         align: 'DL',
         ranksep: 60
         // controlPoints: true,
@@ -250,15 +255,15 @@ export const TopologyPanel: React.FC<Props> = ({ options, data, width, height, r
     graph.render();
 
     SGraph = graph;
-    serviceLine && serviceLineUpdate();
+    serviceLineUpdate();
     updateLinesAndNodes(lineMetric, serviceLine);
   };
   // 只勾选一个namespace是workload为all或者workload为单个值的调用关系处理
   const workloadRelationHandle = (topoData: any, nodeData: NodeDataProps, edgeData: EdgeDataProps, showPod: boolean, serviceLine = showService) => {
     let nodes: any[] = [], edges: any[] = [];
     let result: any[] = [];
-    // 当workload为all的时候，筛选对应namespace下所有workload的调用关系
-    if (workload.indexOf(',') > -1) {
+    if (workload.split(',').length > 1) {
+      // 当workload为all的时候，筛选对应namespace下所有workload的调用关系
       result = _.filter(topoData, (item: any) => item.fields[1].labels.dst_namespace === namespace || item.fields[1].labels.src_namespace === namespace);
       // console.log('workload Topology', result);
     } else {
@@ -286,7 +291,6 @@ export const TopologyPanel: React.FC<Props> = ({ options, data, width, height, r
     });
     nodes = detailNodesHandle(nodes, nodeData);
     edges = detailEdgesHandle(nodes, edges, edgeData, serviceLine);
-    
     return { nodes, edges };
   }
   // 获取当前拓扑图下节点的类型数组，用于右侧的legend绘制
@@ -346,7 +350,9 @@ export const TopologyPanel: React.FC<Props> = ({ options, data, width, height, r
       nodes = [].concat(result.nodes);
       edges = [].concat(result.edges);
     } else {
-      let result: any = workloadRelationHandle(topoData, nodeData, edgeData, false);
+      let showPod = workload.split(',').length === 1;
+      setView(showPod ? 'pod_view' : 'workload_view');
+      let result: any = workloadRelationHandle(topoData, nodeData, edgeData, showPod);
       nodes = [].concat(result.nodes);
       edges = [].concat(result.edges);
     }
@@ -364,22 +370,22 @@ export const TopologyPanel: React.FC<Props> = ({ options, data, width, height, r
     if (SGraph) {
       updateLinesAndNodes();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [volumes]);
+
   useEffect(() => {
     if (namespace.split(',').length === 1) {
       setShowCheckbox(true);
+      if (workload.split(',').length === 1) {
+        setShowView(true);
+      } else {
+        setShowView(false);
+      }
     } else {
       setShowCheckbox(false);
-    }
-  }, [namespace]);
-  useEffect(() => {
-    if (workload.split(',').length === 1) {
-      setShowView(true);
-    } else {
       setShowView(false);
     }
-  }, [workload]);
+  }, [namespace, workload]);
   useEffect(() => {
     if (data.state === 'Done') {
       initData();
@@ -392,6 +398,18 @@ export const TopologyPanel: React.FC<Props> = ({ options, data, width, height, r
     setLineMetric(opt.value);
     updateLinesAndNodes(opt.value);
   }
+  const changeDirection = (value: any) => {
+    setDirection(value);
+    SGraph.updateLayout({
+      rankdir: value
+    });
+    SGraph.fitView(10);
+    if (!firstChangeDir) {
+      serviceLineUpdate(value);
+      setFirstChangeDir(true);
+    }
+  }
+  // 是否显示调用关系上的service调用
   const changeShowService = () => {
     let show = !showService ? true : false;
     setShowService(show);
@@ -403,7 +421,7 @@ export const TopologyPanel: React.FC<Props> = ({ options, data, width, height, r
     draw(gdata, show);
     handleResult(gdata);
   }
-
+  // 切换View Mode。workload视图下切换workload跟pod视图
   const changeView = (value: any) => {
     setView(value);
     let { nodes, edges } = workloadRelationHandle(topoData, nodeData, edgeData, value === 'pod_view', showService);
@@ -428,21 +446,38 @@ export const TopologyPanel: React.FC<Props> = ({ options, data, width, height, r
       <div className={styles.topLineMetric}>
         <div className={styles.metricSelect}>
           <span style={{ width: '180px' }}>Call Line Metric</span>
-          <Select value={lineMetric} options={meetricList} onChange={lineMetricChange}/>
+          <Select value={lineMetric} options={metricList} onChange={lineMetricChange}/>
         </div>
-        {
-          showCheckbox ? <Checkbox css="" value={showService} onChange={changeShowService} label='View Service Call'/> : null
-        }
       </div>
       <div className={styles.topRightWarp}>
+        <div className={styles.viewRadioMode}>
+          <div>
+            <span>Layout Direction</span>
+            <Tooltip content="change topology layout。TB mean top to bottom，LR mean left to right。">
+              <Icon name="question-circle" />
+            </Tooltip>
+          </div>
+          <RadioButtonGroup options={directionOptions} value={direction} onChange={changeDirection}/>
+        </div>
         {
           showView ? <div className={styles.viewRadioMode}>
             <span>View Mode</span>
             <RadioButtonGroup options={viewRadioOptions} value={view} onChange={changeView}/>
           </div> : null
         }
+        {
+          showCheckbox ? <div className={styles.viewRadioMode}>
+            <div>
+              <span>Show Services</span>
+              <Tooltip content="if the network communicate by Kubernetes service, the service name will be shown。">
+                <Icon name="question-circle" />
+              </Tooltip>
+            </div>
+            <RadioButtonGroup options={showServiceOptions} value={showService} onChange={changeShowService}/>
+          </div> : null
+        }
+        <TopoLegend typeList={nodeTypesList} metric={lineMetric} volumes={volumes} options={options}/>
       </div>
-      <TopoLegend typeList={nodeTypesList} metric={lineMetric} volumes={volumes}/>
       <div id="kindling_topo" style={{ height: '100%' }} ref={graphRef}></div>
     </div>
   );
@@ -473,12 +508,13 @@ const getStyles = stylesFactory(() => {
       z-index: 10;
       display: flex;
       flex-direction: column;
-      width: 230px;
+      width: 245px;
     `,
     viewRadioMode: css`
       display: flex;
       align-items: center;
       justify-content: space-between;
+      margin-bottom: 10px;
     `,
     svg: css`
       position: absolute;

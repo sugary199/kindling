@@ -68,9 +68,22 @@ const (
 	RequestProcessingStatus = "request_processing_status"
 	ResponseRspxferStatus   = "response_rspxfer_status"
 
-	ExternalClusterNamespace = "EXTERNAL"
-)
+	ExternalClusterNamespace = "NOT_FOUND_EXTERNAL"
+	InternalClusterNamespace = "NOT_FOUND_INTERNAL"
 
+	RequestTotalNs    = "request_total_ns"
+	RequestSentNs     = "request_sent_ns"
+	WaitingTTfbNs     = "waiting_ttfb_ns"
+	ContentDownloadNs = "content_download_ns"
+	RequestIoBytes    = "requestio_bytes"
+	ResponseIoBytes   = "responseio_bytes"
+	Timestamp         = "timestamp"
+	IsConvergent      = "is_convergent"
+)
 const (
 	STR_EMPTY = ""
 )
+
+func IsNamespaceNotFound(namespace string) bool {
+	return namespace == ExternalClusterNamespace || namespace == InternalClusterNamespace
+}

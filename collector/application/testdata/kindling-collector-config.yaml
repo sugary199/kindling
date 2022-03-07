@@ -7,6 +7,10 @@ receivers:
     zeromqreq:
       endpoint: ipc:///home/kindling/0
       subscribe:
+        - name: syscall_exit-writev
+          category: net
+        - name: syscall_exit-readv
+          category: net
         - name: syscall_exit-write
           category: net
         - name: syscall_exit-read
@@ -60,6 +64,7 @@ processors:
   kindlingformatprocessor:
     need_trace_as_metric: true
     need_pod_detail: true
+    store_external_src_ip: true
   nodemetricprocessor:
 
 exporters:

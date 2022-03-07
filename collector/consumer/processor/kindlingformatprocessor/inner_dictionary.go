@@ -15,7 +15,7 @@ const (
 
 type gauges struct {
 	*model.GaugeGroup
-	targetValues []model.Gauge
+	targetValues []*model.Gauge
 	targetLabels *model.AttributeMap
 }
 
@@ -30,7 +30,7 @@ func newGauges(g *model.GaugeGroup) *gauges {
 
 	return &gauges{
 		GaugeGroup:   gaugeGroupCp,
-		targetValues: make([]model.Gauge, 0, len(g.Values)),
+		targetValues: make([]*model.Gauge, 0, len(g.Values)),
 		targetLabels: model.NewAttributeMap(),
 	}
 }
@@ -60,7 +60,7 @@ func (g gauges) Process(cfg *Config, relabels ...Relabel) *model.GaugeGroup {
 func MetricName(cfg *Config, g *gauges) {
 	for _, gauge := range g.Values {
 		if name := constlabels.ToKindlingMetricName(gauge.Name, g.Labels.GetBoolValue(constlabels.IsServer)); name != "" {
-			g.targetValues = append(g.targetValues, model.Gauge{
+			g.targetValues = append(g.targetValues, &model.Gauge{
 				Name:  name,
 				Value: gauge.Value,
 			})
@@ -78,15 +78,19 @@ func TraceName(cfg *Config, g *gauges) {
 		}
 	}
 
-	g.targetValues = append(g.targetValues, model.Gauge{
+	g.targetValues = append(g.targetValues, &model.Gauge{
 		Name:  constlabels.ToKindlingTraceAsMetricName(),
 		Value: requestDuration,
 	})
 }
 
+func SpanName(cfg *Config, g *gauges) {
+	g.Name = constvalues.SpanInfo
+}
+
 func ProtocolDetailMetricName(cfg *Config, g *gauges) {
 	for _, gauge := range g.Values {
-		g.targetValues = append(g.targetValues, model.Gauge{
+		g.targetValues = append(g.targetValues, &model.Gauge{
 			Name:  constlabels.ToKindlingDetailMetricName(gauge.Name, g.Labels.GetStringValue(constlabels.Protocol)),
 			Value: gauge.Value,
 		})
@@ -126,7 +130,7 @@ func TopologyTraceK8sInfo(cfg *Config, g *gauges) {
 }
 
 func TopologyK8sInfo(cfg *Config, g *gauges) {
-	if cfg.NeedPodDetail || g.Labels.GetStringValue(constlabels.DstNamespace) == constlabels.ExternalClusterNamespace {
+	if cfg.NeedPodDetail {
 		TopologyTraceK8sInfo(cfg, g)
 	} else {
 		g.targetLabels.AddStringValue(constlabels.SrcNamespace, g.Labels.GetStringValue(constlabels.SrcNamespace))
@@ -142,13 +146,27 @@ func TopologyK8sInfo(cfg *Config, g *gauges) {
 		g.targetLabels.AddStringValue(constlabels.DstWorkloadKind, g.Labels.GetStringValue(constlabels.DstWorkloadKind))
 		g.targetLabels.AddStringValue(constlabels.DstWorkloadName, g.Labels.GetStringValue(constlabels.DstWorkloadName))
 		g.targetLabels.AddStringValue(constlabels.DstService, g.Labels.GetStringValue(constlabels.DstService))
+
+		if constlabels.IsNamespaceNotFound(g.Labels.GetStringValue(constlabels.DstNamespace)) {
+			g.targetLabels.AddStringValue(constlabels.DstNode, g.Labels.GetStringValue(constlabels.DstNode))
+			g.targetLabels.AddStringValue(constlabels.DstPod, g.Labels.GetStringValue(constlabels.DstPod))
+		}
 	}
 }
 
-func SrcDockerInfo(cfg *Config, g *gauges) {
+// SrcContainerInfo adds container level information to the input gauges if cfg.NeedPodDetail is enabled.
+func SrcContainerInfo(cfg *Config, g *gauges) {
 	if cfg.NeedPodDetail {
 		g.targetLabels.AddStringValue(constlabels.SrcContainer, g.Labels.GetStringValue(constlabels.SrcContainer))
 		g.targetLabels.AddStringValue(constlabels.SrcContainerId, g.Labels.GetStringValue(constlabels.SrcContainerId))
+	}
+}
+
+// DstContainerInfo adds container level information to the input gauges if cfg.NeedPodDetail is enabled.
+func DstContainerInfo(cfg *Config, g *gauges) {
+	if cfg.NeedPodDetail {
+		g.targetLabels.AddStringValue(constlabels.DstContainer, g.Labels.GetStringValue(constlabels.DstContainer))
+		g.targetLabels.AddStringValue(constlabels.DstContainerId, g.Labels.GetStringValue(constlabels.DstContainerId))
 	}
 }
 
@@ -186,7 +204,7 @@ func TopologyTraceInstanceInfo(cfg *Config, g *gauges) {
 func TopologyInstanceInfo(cfg *Config, g *gauges) {
 	if cfg.NeedPodDetail {
 		TopologyTraceInstanceInfo(cfg, g)
-	} else if g.Labels.GetStringValue(constlabels.DstNamespace) == constlabels.ExternalClusterNamespace {
+	} else if constlabels.IsNamespaceNotFound(g.Labels.GetStringValue(constlabels.DstNamespace)) {
 		DstInstanceInfo(cfg, g)
 	}
 }
@@ -203,6 +221,12 @@ func DstInstanceInfo(cfg *Config, g *gauges) {
 	} else {
 		g.targetLabels.AddIntValue(constlabels.DstPort, g.Labels.GetIntValue(constlabels.DstPort))
 	}
+}
+
+func SpanProtocolInfo(cfg *Config, g *gauges) {
+	g.targetLabels.AddStringValue(constlabels.Protocol, g.Labels.GetStringValue(constlabels.Protocol))
+	g.targetLabels.AddStringValue(constlabels.ContentKey, g.Labels.GetStringValue(constlabels.ContentKey))
+	fillSpanProtocolLabels(g, ProtocolType(g.Labels.GetStringValue(constlabels.Protocol)))
 }
 
 func ServiceProtocolInfo(cfg *Config, g *gauges) {
@@ -257,4 +281,51 @@ func getSubStageStatus(requestSendTime int64) string {
 	} else {
 		return YellowStatus
 	}
+}
+
+func traceSpanContainerInfo(cfg *Config, g *gauges) {
+	g.targetLabels.AddStringValue(srcContainerName, g.Labels.GetStringValue(constlabels.SrcContainer))
+	g.targetLabels.AddStringValue(srcContainerId, g.Labels.GetStringValue(constlabels.SrcContainerId))
+	g.targetLabels.AddStringValue(dstContainerName, g.Labels.GetStringValue(constlabels.DstContainer))
+	g.targetLabels.AddStringValue(dstContainerId, g.Labels.GetStringValue(constlabels.DstContainerId))
+}
+
+func traceSpanInstanceInfo(cfg *Config, g *gauges) {
+	g.targetLabels.AddStringValue(constlabels.SrcIp, g.Labels.GetStringValue(constlabels.SrcIp))
+	g.targetLabels.AddStringValue(constlabels.SrcPort, g.Labels.GetStringValue(constlabels.SrcPort))
+	DstInstanceInfo(cfg, g)
+}
+
+func traceSpanValuesToLabel(cfg *Config, g *gauges) {
+	for i := 0; i < len(g.Values); i++ {
+		switch g.Values[i].Name {
+		case constvalues.RequestSentTime:
+			g.targetLabels.AddIntValue(constlabels.RequestSentNs, g.Values[i].Value)
+		case constvalues.WaitingTtfbTime:
+			g.targetLabels.AddIntValue(constlabels.WaitingTTfbNs, g.Values[i].Value)
+		case constvalues.ContentDownloadTime:
+			g.targetLabels.AddIntValue(constlabels.ContentDownloadNs, g.Values[i].Value)
+		case constvalues.RequestTotalTime:
+			g.targetLabels.AddIntValue(constlabels.RequestTotalNs, g.Values[i].Value)
+		case constvalues.RequestIo:
+			g.targetLabels.AddIntValue(constlabels.RequestIoBytes, g.Values[i].Value)
+		case constvalues.ResponseIo:
+			g.targetLabels.AddIntValue(constlabels.ResponseIoBytes, g.Values[i].Value)
+		}
+	}
+
+	g.targetLabels.AddIntValue(constlabels.IsServer, int64(If(g.Labels.GetBoolValue(constlabels.IsServer), 1, 0).(int)))
+	g.targetLabels.AddIntValue(constlabels.IsError, int64(If(g.Labels.GetBoolValue(constlabels.IsError), 1, 0).(int)))
+	g.targetLabels.AddIntValue(constlabels.IsSlow, int64(If(g.Labels.GetBoolValue(constlabels.IsSlow), 1, 0).(int)))
+
+	// TODO is_convergent
+	g.targetLabels.AddIntValue(constlabels.IsConvergent, 0)
+	g.targetLabels.AddIntValue(constlabels.Timestamp, int64(g.Timestamp/millToNano))
+}
+
+func If(condition bool, trueVal, falseVal interface{}) interface{} {
+	if condition {
+		return trueVal
+	}
+	return falseVal
 }

@@ -34,7 +34,7 @@ func Test_gauges_Process(t *testing.T) {
 			name: "Trace",
 			args: args{
 				gauges:   newGauges(newInnerGauges(true)),
-				cfg:      &Config{NeedTraceAsMetric: true},
+				cfg:      &Config{NeedTraceAsMetric: true, NeedPodDetail: true},
 				relabels: []Relabel{TraceName, TopologyInstanceInfo, TopologyK8sInfo, ServiceProtocolInfo, TraceStatusInfo},
 			},
 			want: getTrace(),
@@ -43,7 +43,7 @@ func Test_gauges_Process(t *testing.T) {
 			name: "ServiceMetric",
 			args: args{
 				gauges:   newGauges(newInnerGauges(true)),
-				cfg:      &Config{NeedTraceAsMetric: true},
+				cfg:      &Config{NeedTraceAsMetric: true, NeedPodDetail: true},
 				relabels: []Relabel{MetricName, ServiceInstanceInfo, ServiceK8sInfo, ServiceProtocolInfo},
 			},
 			want: getServiceMetric(),
@@ -52,8 +52,8 @@ func Test_gauges_Process(t *testing.T) {
 			name: "TopologyMetric",
 			args: args{
 				gauges:   newGauges(newInnerGauges(false)),
-				cfg:      &Config{NeedTraceAsMetric: true},
-				relabels: []Relabel{MetricName, TopologyInstanceInfo, TopologyK8sInfo, SrcDockerInfo, TopologyProtocolInfo},
+				cfg:      &Config{NeedTraceAsMetric: true, NeedPodDetail: true},
+				relabels: []Relabel{MetricName, TopologyInstanceInfo, TopologyK8sInfo, SrcContainerInfo, TopologyProtocolInfo},
 			},
 			want: getTopologyMetric(),
 		},
@@ -92,7 +92,7 @@ func Test_gauges_Process(t *testing.T) {
 func newInnerGauges(isServer bool) *model.GaugeGroup {
 	gaugesGroup := model.GaugeGroup{
 		Name: "testGauge",
-		Values: []model.Gauge{
+		Values: []*model.Gauge{
 			{constvalues.RequestIo, values[constvalues.RequestIo]},
 			{constvalues.ResponseIo, values[constvalues.ResponseIo]},
 			{constvalues.RequestTotalTime, values[constvalues.RequestTotalTime]},
@@ -107,6 +107,8 @@ func newInnerGauges(isServer bool) *model.GaugeGroup {
 	gaugesGroup.Labels.AddStringValue(constlabels.Pid, "test-Pid")
 	gaugesGroup.Labels.AddStringValue(constlabels.Protocol, http)
 	gaugesGroup.Labels.AddStringValue(constlabels.HttpUrl, "httpUrl")
+	// For now, only http gauges will have the ContentKey label.
+	gaugesGroup.Labels.AddStringValue(constlabels.ContentKey, "httpUrl")
 	gaugesGroup.Labels.AddIntValue(constlabels.HttpStatusCode, 200)
 	gaugesGroup.Labels.AddStringValue(constlabels.IsError, "test-IsError")
 	gaugesGroup.Labels.AddStringValue(constlabels.ErrorType, "test-ErrorType")
@@ -142,7 +144,7 @@ func newInnerGauges(isServer bool) *model.GaugeGroup {
 func getTrace() *model.GaugeGroup {
 	gaugesGroup := model.GaugeGroup{
 		Name: "testGauge",
-		Values: []model.Gauge{
+		Values: []*model.Gauge{
 			{"kindling_trace_request_duration_nanoseconds", values[constvalues.RequestTotalTime]},
 		},
 		Labels:    model.NewAttributeMap(),
@@ -183,7 +185,7 @@ func getTrace() *model.GaugeGroup {
 func getServiceMetric() *model.GaugeGroup {
 	gaugesGroup := model.GaugeGroup{
 		Name: "testGauge",
-		Values: []model.Gauge{
+		Values: []*model.Gauge{
 			{"kindling_entity_request_receive_bytes_total", values[constvalues.RequestIo]},
 			{"kindling_entity_request_send_bytes_total", values[constvalues.ResponseIo]},
 			{"kindling_entity_request_duration_nanoseconds", values[constvalues.RequestTotalTime]},
@@ -217,7 +219,7 @@ func getServiceMetric() *model.GaugeGroup {
 func getTopologyMetric() *model.GaugeGroup {
 	gaugesGroup := model.GaugeGroup{
 		Name: "testGauge",
-		Values: []model.Gauge{
+		Values: []*model.Gauge{
 			{"kindling_topology_request_request_bytes_total", values[constvalues.RequestIo]},
 			{"kindling_topology_request_response_bytes_total", values[constvalues.ResponseIo]},
 			{"kindling_topology_request_duration_nanoseconds", values[constvalues.RequestTotalTime]},
