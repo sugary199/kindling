@@ -193,6 +193,7 @@ func NewExporter(config interface{}, telemetry *component.TelemetryTools) export
 
 			timer := time.NewTicker(1 * time.Minute)
 			meter := cont.Meter("arms_app_instance")
+
 			//metaChan := make([]chan kubernetes.ArmsMetadata, 500)
 			for {
 				select {
@@ -214,6 +215,22 @@ func NewExporter(config interface{}, telemetry *component.TelemetryTools) export
 						//	}
 						//}
 						meter.NewInt64GaugeObserver("arms_app_instance", func(ctx context.Context, result metric.Int64ObserverResult) {
+							if metas == nil {
+								labels := make([]attribute.KeyValue, 0, 11)
+								labels = append(labels, attribute.String("pod_name", "aa"))
+								labels = append(labels, attribute.String("namespace", "aa"))
+								labels = append(labels, attribute.String("app_id", "aa"))
+								labels = append(labels, attribute.String("app_name", "aa"))
+								labels = append(labels, attribute.String("node_ip", "aa"))
+								labels = append(labels, attribute.String("node_name", "aa"))
+								labels = append(labels, attribute.String("pod_ip", "aa"))
+								labels = append(labels, attribute.String("service_ip", "aa"))
+								labels = append(labels, attribute.String("service_name", "aa"))
+								labels = append(labels, attribute.String("workload_kind", "aa"))
+								labels = append(labels, attribute.String("workload_name", "aa"))
+								result.Observe(1, labels ... )
+								return
+							}
 							for _, meta := range metas {
 								labels := make([]attribute.KeyValue, 0, 11)
 								if true {
