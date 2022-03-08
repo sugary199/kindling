@@ -295,3 +295,28 @@ func TruncateContainerId(containerId string) string {
 	}
 	return secondString[0:l]
 }
+
+//// heartBeatManager used to send app metadata to server per minute.
+//func (m *podMap) heartBeatManager() {
+//	timer := time.NewTicker(1 * time.Minute)
+//
+//	for {
+//		select {
+//		case <-timer.C:
+//			// 处理heatbeat逻辑，生成Metrics
+//			func() {
+//				m.mutex.RLock()
+//				defer m.mutex.RUnlock()
+//				for _, mm := range m.info {
+//					for podName, podInfo := range mm {
+//						if podInfo.ArmsInfo == nil || !podInfo.ArmsInfo.Enable {
+//							continue
+//						}
+//						// generate metadata info
+//
+//					}
+//				}
+//			}()
+//		}
+//	}
+//}

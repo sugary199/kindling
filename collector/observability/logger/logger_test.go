@@ -16,6 +16,6 @@ func Test_newLogger(t *testing.T) {
 		Compress:   false,
 	}
 	logger := CreateCombineLogger(config)
-	logger.Info("This is a Info test", zap.String("param1", "value1"))
-	logger.Debug("This is a Info test", zap.String("param1", "value1"))
+	logger.Info("This is a info test", zap.String("param1", "value1"))
+	logger.Debug("This is a info test", zap.String("param1", "value1"))
 }

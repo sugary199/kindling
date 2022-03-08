@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Kindling-project/kindling/collector/component"
 	"github.com/Kindling-project/kindling/collector/consumer/exporter"
+	"github.com/Kindling-project/kindling/collector/metadata/kubernetes"
 	"github.com/Kindling-project/kindling/collector/model"
 	"github.com/Kindling-project/kindling/collector/model/constvalues"
 	"go.opentelemetry.io/otel/attribute"
@@ -187,6 +188,68 @@ func NewExporter(config interface{}, telemetry *component.TelemetryTools) export
 			telemetry.Logger.Panic("failed to start controller:", zap.Error(err))
 			return nil
 		}
+
+		go func() {
+
+			timer := time.NewTicker(1 * time.Minute)
+			meter := cont.Meter("arms_app_instance")
+			//metaChan := make([]chan kubernetes.ArmsMetadata, 500)
+			for {
+				select {
+				case <-timer.C:
+					// 处理heatbeat逻辑，生成Metrics
+					func() {
+						//gpi := kubernetes.globalPodInfo
+						//gpi.mutex.RLock()
+						//defer gpi.mutex.RUnlock()
+
+						metas := kubernetes.MetaDataCache.GetEnableArmsPodsMeta()
+						//for _, mm := range gpi.info {
+						//	for podName, podInfo := range mm {
+						//		if podInfo.ArmsInfo == nil || !podInfo.ArmsInfo.Enable {
+						//			continue
+						//		}
+						//		// generate metadata info
+						//
+						//	}
+						//}
+						meter.NewInt64GaugeObserver("arms_app_instance", func(ctx context.Context, result metric.Int64ObserverResult) {
+							for _, meta := range metas {
+								labels := make([]attribute.KeyValue, 0, 11)
+								if true {
+									labels = append(labels, attribute.String("pod_name", "aa"))
+									labels = append(labels, attribute.String("namespace", "aa"))
+									labels = append(labels, attribute.String("app_id", "aa"))
+									labels = append(labels, attribute.String("app_name", "aa"))
+									labels = append(labels, attribute.String("node_ip", "aa"))
+									labels = append(labels, attribute.String("node_name", "aa"))
+									labels = append(labels, attribute.String("pod_ip", "aa"))
+									labels = append(labels, attribute.String("service_ip", "aa"))
+									labels = append(labels, attribute.String("service_name", "aa"))
+									labels = append(labels, attribute.String("workload_kind", "aa"))
+									labels = append(labels, attribute.String("workload_name", "aa"))
+								} else {
+									labels = append(labels, attribute.String("pod_name", meta.PodName))
+									labels = append(labels, attribute.String("namespace", meta.Namespace))
+									labels = append(labels, attribute.String("app_id", meta.AppId))
+									labels = append(labels, attribute.String("app_name", meta.AppName))
+									labels = append(labels, attribute.String("node_ip", meta.NodeIp))
+									labels = append(labels, attribute.String("node_name", meta.NodeName))
+									labels = append(labels, attribute.String("pod_ip", meta.PodIp))
+									labels = append(labels, attribute.String("service_ip", meta.ServiceIp))
+									labels = append(labels, attribute.String("service_name", meta.ServiceName))
+									labels = append(labels, attribute.String("workload_kind", meta.WorkloadKind))
+									labels = append(labels, attribute.String("workload_name", meta.WorkloadName))
+								}
+
+								result.Observe(1, labels ... )
+							}
+						}, metric.WithDescription("ARMS app instance metadata info"))
+					}()
+				}
+			}
+
+		} ()
 	}
 
 	return otelexporter

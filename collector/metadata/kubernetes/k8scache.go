@@ -28,6 +28,20 @@ type K8sContainerInfo struct {
 	RefPodInfo  *K8sPodInfo
 }
 
+type ArmsMetadata struct {
+	AppId string
+	AppName string
+	NodeIp string
+	NodeName string
+	PodName string
+	PodIp string
+	WorkloadName string
+	WorkloadKind string
+	ServiceName string
+	ServiceIp string
+	Namespace string
+}
+
 type ArmsInfo struct {
 	AppName string
 	Enable bool
@@ -207,6 +221,10 @@ func New() *K8sMetaDataCache {
 	}
 
 	return c
+}
+
+func (c *K8sMetaDataCache) GetEnableArmsPodsMeta() []*ArmsMetadata {
+	return nil
 }
 
 func (c *K8sMetaDataCache) AddByContainerId(containerId string, resource *K8sContainerInfo) {

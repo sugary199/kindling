@@ -155,7 +155,7 @@ func (r *UdsReceiver) startZeroMqPull() error {
 					r.telemetry.Logger.Error("Error sending event to next consumer: %v", zap.Error(err))
 					continue
 				}
-				//r.logger.Info("name"+data.HcmineEvent[0].GetName())
+				//r.logger.info("name"+data.HcmineEvent[0].GetName())
 			}
 
 		}
