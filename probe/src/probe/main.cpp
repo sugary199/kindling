@@ -167,6 +167,7 @@ int main(int argc, char** argv) {
 
 		auto kernel_version = px::stirling::utils::GetKernelVersion().ValueOrDie();
         LOG(INFO) << absl::Substitute("kernel version is $0.$1.$2", kernel_version.version, kernel_version.major_rev, kernel_version.minor_rev);
+	std::unique_ptr<px::stirling::Stirling> stirling_;
         if (!FLAGS_enable_stirling) {
             LOG(WARNING) << "stirling module is set to disable, add --enable_stirling to enable ... ";
         } else {
@@ -176,8 +177,6 @@ int main(int argc, char** argv) {
                 init_stirling = false;
                 LOG(WARNING) << absl::Substitute("kernel version is $0.$1.$2, do not init stirling ... ", kernel_version.version, kernel_version.major_rev, kernel_version.minor_rev);
             }
-
-            std::unique_ptr<px::stirling::Stirling> stirling_;
 
             if (init_stirling) {
                 // init bcc & stirling

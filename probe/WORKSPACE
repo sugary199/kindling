@@ -4,7 +4,7 @@ load("@bazel_tools//tools/build_defs/repo:git.bzl","git_repository")
 git_repository(
     name = "px",
     remote = "https://github.com/KayzzzZ/pixie.git",
-    commit = "251517b59e1836979faa79bbf2c55766f6631bd6",
+    commit = "2d45f14dc69c060260c5634b7718f05f3f0c7bdb",
 #    branch = "kindling",
 )
 
