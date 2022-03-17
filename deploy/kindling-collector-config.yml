@@ -103,6 +103,28 @@ exporters:
       kindling_tcp_retransmit_total: 1
       kindling_tcp_packet_loss_total: 1
       kindling_node_transmit_bytes_total: 1
+
+      # arms metrics 2.0 etc
+      ## http (http1.0/http1.1/http2.0)
+      http_server_duration_ms: 2
+      http_client_duration_ms: 2
+      ## rpc (dubbo/thrift/grpc)
+      rpc_server_duration_ms: 2
+      rpc_client_duration_ms: 2
+      ## db (redis/mysql/pgsql)
+      db_client_duration_ms: 2
+      db_server_duration_ms: 2
+      ## mq (kafka/rocketmq/rabbitmq)
+      messaging_pub_duration_ms: 2
+      messaging_sub_duration: 2
+
+      message_client_duration_ms: 2
+      message_server_duration_ms: 2
+      ## dns
+      dns_client_duration_ms: 2
+      ## unknown ()
+      unknown_server_duration_ms: 2
+      unknown_client_duration_ms: 2
     # Export data in the following ways: ["prometheus", "otlp", "stdout"]
     # Note: configure the corresponding section to make everything ok
     export_kind: prometheus

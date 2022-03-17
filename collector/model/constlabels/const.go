@@ -46,7 +46,7 @@ const (
 	Service         = "service"
 	Pod             = "pod"
 	Container       = "container"
-	Ip              = "ip"
+	//Ip              = "ip"
 	Port            = "port"
 	ArmsPid			= "app_id"
 	SrcPid			= "src_app_id"
@@ -57,7 +57,9 @@ const (
 
 	RequestContent  = "request_content"
 	ResponseContent = "response_content"
-	StatusCode      = "status_code"
+	//StatusCode      = "status_code"
+
+	Role = "role"
 
 	Topic      = "topic"
 	Operation  = "operation"
@@ -79,6 +81,42 @@ const (
 	ResponseIoBytes   = "responseio_bytes"
 	Timestamp         = "timestamp"
 	IsConvergent      = "is_convergent"
+
+
+	// ***** ARMS Metrics 2.0 *****
+
+	// -- common dimensions --
+	// Source for our scenario, always be BPF
+	Source = "source"
+	// RegionId
+	RegionId = "regionId"
+	// ClusterId ACK clusterId
+	ClusterId = "clusterId"
+	// Ip
+	Ip = "ip"
+	RemoteIp = "remoteIp"
+	RemotePort = "remotePort"
+
+	RemoteNamespace = "remoteNamespace"
+	RemotePod = "remotePod"
+	RemoteWorkloadKind = "remoteWorkloadKind"
+	RemoteWorkloadName = "remoteWorkloadName"
+	RemoteNode = "remoteNode"
+	RemoteContainer = "remoteContainer"
+	RemoteContainerId = "remoteContainerId"
+	RemoteService = "remoteService"
+	// ServiceName app name
+	ServiceName = "serviceName"
+	// RemoteServiceName peer app name
+	RemoteServiceName = "remoteServiceName"
+	// SpanName
+	SpanName = "spanName"
+	// StatusCode
+	StatusCode = "statusCode"
+	// ComponentType
+	ComponentType = "componentType"
+	// **************************
+
 )
 const (
 	STR_EMPTY = ""

@@ -4,6 +4,7 @@ import (
 	"github.com/Kindling-project/kindling/collector/model"
 	"github.com/Kindling-project/kindling/collector/model/constlabels"
 	"github.com/Kindling-project/kindling/collector/model/constvalues"
+	"strings"
 )
 
 const (
@@ -57,6 +58,53 @@ func (g gauges) Process(cfg *Config, relabels ...Relabel) *model.GaugeGroup {
 	return g.getResult()
 }
 
+// DetailMetricName @qianlu.kk
+func DetailMetricName(cfg *Config, g *gauges) {
+	// 详细指标名称，需要区分protocol和role信息
+	protocol := g.Labels.GetStringValue(constlabels.Protocol)
+	_type := constlabels.ToType(g.Labels.GetStringValue(constlabels.Protocol))
+	if _type == "" {
+		// log
+		return
+	}
+
+	role := "client"
+	if g.Labels.GetBoolValue(constlabels.IsServer) {
+		role = "server"
+	}
+
+	for _, gauge := range g.Values {
+		//protocol := g.Labels.GetStringValue(constlabels.Protocol)
+		if gauge.Name == constvalues.RequestTotalTime {
+			// entity metrics
+			g.targetValues = append(g.targetValues, &model.Gauge{
+				Name:  strings.ToLower(protocol) + "_" + role + "_duration_ms",
+				Value: gauge.Value / 1000000.0,
+			})
+		} else {
+			// io metrics
+			if name := constlabels.ToDetailMetricName(gauge.Name); name != "" {
+				g.targetValues = append(g.targetValues, &model.Gauge{
+					Name:  name,
+					Value: gauge.Value,
+				})
+			}
+		}
+	}
+}
+
+// TopologyMetricName @qianlu.kk
+func TopologyMetricName(cfg *Config, g *gauges) {
+	for _, gauge := range g.Values {
+		if name := constlabels.ToTopologyMetricName(gauge.Name); name != "" {
+			g.targetValues = append(g.targetValues, &model.Gauge{
+				Name:  name,
+				Value: gauge.Value,
+			})
+		}
+	}
+}
+
 func MetricName(cfg *Config, g *gauges) {
 	for _, gauge := range g.Values {
 		if name := constlabels.ToKindlingMetricName(gauge.Name, g.Labels.GetBoolValue(constlabels.IsServer)); name != "" {
@@ -99,15 +147,25 @@ func ProtocolDetailMetricName(cfg *Config, g *gauges) {
 
 func ServiceK8sInfo(cfg *Config, g *gauges) {
 	if cfg.NeedPodDetail {
-		g.targetLabels.AddStringValue(constlabels.Node, g.Labels.GetStringValue(constlabels.DstNode))
-		g.targetLabels.AddStringValue(constlabels.Pod, g.Labels.GetStringValue(constlabels.DstPod))
-		g.targetLabels.AddStringValue(constlabels.Container, g.Labels.GetStringValue(constlabels.DstContainer))
-		g.targetLabels.AddStringValue(constlabels.ContainerId, g.Labels.GetStringValue(constlabels.DstContainerId))
+		//g.targetLabels.AddStringValue(constlabels.Node, g.Labels.GetStringValue(constlabels.DstNode))
+		//g.targetLabels.AddStringValue(constlabels.Pod, g.Labels.GetStringValue(constlabels.DstPod))
+		//g.targetLabels.AddStringValue(constlabels.Container, g.Labels.GetStringValue(constlabels.DstContainer))
+		//g.targetLabels.AddStringValue(constlabels.ContainerId, g.Labels.GetStringValue(constlabels.DstContainerId))
+		g.targetLabels.AddStringValue(constlabels.RemoteNode, g.Labels.GetStringValue(constlabels.DstNode))
+		g.targetLabels.AddStringValue(constlabels.RemotePod, g.Labels.GetStringValue(constlabels.DstPod))
+		g.targetLabels.AddStringValue(constlabels.RemoteContainer, g.Labels.GetStringValue(constlabels.DstContainer))
+		g.targetLabels.AddStringValue(constlabels.RemoteContainerId, g.Labels.GetStringValue(constlabels.DstContainerId))
+
 	}
-	g.targetLabels.AddStringValue(constlabels.Namespace, g.Labels.GetStringValue(constlabels.DstNamespace))
-	g.targetLabels.AddStringValue(constlabels.WorkloadKind, g.Labels.GetStringValue(constlabels.DstWorkloadKind))
-	g.targetLabels.AddStringValue(constlabels.WorkloadName, g.Labels.GetStringValue(constlabels.DstWorkloadName))
-	g.targetLabels.AddStringValue(constlabels.Service, g.Labels.GetStringValue(constlabels.DstService))
+	//g.targetLabels.AddStringValue(constlabels.Namespace, g.Labels.GetStringValue(constlabels.DstNamespace))
+	//g.targetLabels.AddStringValue(constlabels.WorkloadKind, g.Labels.GetStringValue(constlabels.DstWorkloadKind))
+	//g.targetLabels.AddStringValue(constlabels.WorkloadName, g.Labels.GetStringValue(constlabels.DstWorkloadName))
+	//g.targetLabels.AddStringValue(constlabels.Service, g.Labels.GetStringValue(constlabels.DstService))
+
+	g.targetLabels.AddStringValue(constlabels.RemoteNamespace, g.Labels.GetStringValue(constlabels.DstNamespace))
+	g.targetLabels.AddStringValue(constlabels.RemoteWorkloadKind, g.Labels.GetStringValue(constlabels.DstWorkloadKind))
+	g.targetLabels.AddStringValue(constlabels.RemoteWorkloadName, g.Labels.GetStringValue(constlabels.DstWorkloadName))
+	g.targetLabels.AddStringValue(constlabels.RemoteService, g.Labels.GetStringValue(constlabels.DstService))
 }
 
 func TopologyTraceK8sInfo(cfg *Config, g *gauges) {
@@ -172,8 +230,10 @@ func DstContainerInfo(cfg *Config, g *gauges) {
 
 func ServiceInstanceInfo(cfg *Config, g *gauges) {
 	if cfg.NeedPodDetail {
-		g.targetLabels.AddStringValue(constlabels.Ip, g.Labels.GetStringValue(constlabels.DstIp))
-		g.targetLabels.AddIntValue(constlabels.Port, g.Labels.GetIntValue(constlabels.DstPort))
+		//g.targetLabels.AddStringValue(constlabels.Ip, g.Labels.GetStringValue(constlabels.DstIp))
+		//g.targetLabels.AddIntValue(constlabels.Port, g.Labels.GetIntValue(constlabels.DstPort))
+		g.targetLabels.AddStringValue(constlabels.RemoteIp, g.Labels.GetStringValue(constlabels.DstIp))
+		g.targetLabels.AddIntValue(constlabels.RemotePort, g.Labels.GetIntValue(constlabels.DstPort))
 	}
 }
 
@@ -229,14 +289,27 @@ func SpanProtocolInfo(cfg *Config, g *gauges) {
 	fillSpanProtocolLabels(g, ProtocolType(g.Labels.GetStringValue(constlabels.Protocol)))
 }
 
+func ServiceRoleInfo(cfg * Config, g *gauges) {
+	role := "client"
+	if g.Labels.GetBoolValue(constlabels.IsServer) {
+		role = "server"
+	}
+	g.targetLabels.AddStringValue(constlabels.Role, role)
+}
+
+// ArmsExtraInfo Attach ARMS extra infos
+func ArmsExtraInfo(cfg *Config, g *gauges) {
+
+}
+
 func ServiceProtocolInfo(cfg *Config, g *gauges) {
 	g.targetLabels.AddStringValue(constlabels.Protocol, g.Labels.GetStringValue(constlabels.Protocol))
-	fillCommonProtocolLabels(g, ProtocolType(g.Labels.GetStringValue(constlabels.Protocol)), true)
+	fillCommonProtocolLabelsV2(g, ProtocolType(g.Labels.GetStringValue(constlabels.Protocol)), true)
 }
 
 func TopologyProtocolInfo(cfg *Config, g *gauges) {
 	g.targetLabels.AddStringValue(constlabels.Protocol, g.Labels.GetStringValue(constlabels.Protocol))
-	fillCommonProtocolLabels(g, ProtocolType(g.Labels.GetStringValue(constlabels.Protocol)), false)
+	fillCommonProtocolLabelsV2(g, ProtocolType(g.Labels.GetStringValue(constlabels.Protocol)), false)
 }
 
 func ProtocolDetailInfo(cfg *Config, g *gauges) {

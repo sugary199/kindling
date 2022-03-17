@@ -76,29 +76,37 @@ func (r *RelabelProcessor) Consume(gaugeGroup *model.GaugeGroup) error {
 		return traceErr
 	}
 
+	// 处理metrics，主要生成detail指标和topology指标
 	if gaugeGroup.Labels.GetBoolValue(constlabels.IsServer) {
 		// Do not emit detail protocol metric at this version
 		//protocol := newGauges(gaugeGroup)
 		//protocolErr := r.nextConsumer.Consume(protocol.Process(r.cfg, ProtocolDetailMetricName, ServiceInstanceInfo, ServiceK8sInfo, ProtocolDetailInfo))
-		metricErr := r.nextConsumer.Consume(common.Process(r.cfg, MetricName, ServiceInstanceInfo, ServiceK8sInfo, ServiceProtocolInfo))
+		// @qianlu.kk detail metrics for server, modify the labels and metric names.
+		metricErr := r.nextConsumer.Consume(common.Process(r.cfg, DetailMetricName, ServiceInstanceInfo,
+			ServiceK8sInfo, ServiceProtocolInfo))
 		var metricErr2 error
 		if r.cfg.StoreExternalSrcIP {
 			srcNamespace := gaugeGroup.Labels.GetStringValue(constlabels.SrcNamespace)
 			if srcNamespace == constlabels.ExternalClusterNamespace {
 				// Use data from server-side to generate a topology metric only when the namespace is EXTERNAL.
 				externalGaugeGroup := newGauges(gaugeGroup)
-				// Here we have to modify the field "IsServer" to generate the metric.
-				externalGaugeGroup.Labels.AddBoolValue(constlabels.IsServer, false)
-				metricErr2 = r.nextConsumer.Consume(externalGaugeGroup.Process(r.cfg, MetricName, TopologyInstanceInfo,
-					TopologyK8sInfo, DstContainerInfo, TopologyProtocolInfo))
+				// Here we have to modify the field "IsServer" to generate the topology metric.
+				//externalGaugeGroup.Labels.AddBoolValue(constlabels.IsServer, false)
+				// @qianlu.kk 服务端拓扑，srcIp是不靠谱的 topo, keep it, just modify the metric name.
+				metricErr2 = r.nextConsumer.Consume(externalGaugeGroup.Process(r.cfg, TopologyMetricName,
+					TopologyInstanceInfo, TopologyK8sInfo, DstContainerInfo, TopologyProtocolInfo))
 				// In case of using the original data later, we reset the field "IsServer".
-				externalGaugeGroup.Labels.AddBoolValue(constlabels.IsServer, true)
+				//externalGaugeGroup.Labels.AddBoolValue(constlabels.IsServer, true)
 			}
 		}
 		return multierr.Combine(traceErr, spanErr, metricErr, metricErr2)
 	} else {
-		metricErr := r.nextConsumer.Consume(common.Process(r.cfg, MetricName, TopologyInstanceInfo, TopologyK8sInfo,
-			SrcContainerInfo, DstContainerInfo, TopologyProtocolInfo))
-		return multierr.Combine(traceErr, metricErr)
+		// topo metrics for client, keep it, just modify the metric name.
+		metricErr := r.nextConsumer.Consume(common.Process(r.cfg, TopologyMetricName, TopologyInstanceInfo,
+			TopologyK8sInfo, SrcContainerInfo, DstContainerInfo, TopologyProtocolInfo))
+		// TODO @qianlu.kk detail metrics for client, modify the labels and metric names.
+		metricErr2 := r.nextConsumer.Consume(common.Process(r.cfg, DetailMetricName, ServiceInstanceInfo, ServiceK8sInfo,
+			ServiceProtocolInfo))
+		return multierr.Combine(traceErr, metricErr, metricErr2)
 	}
 }

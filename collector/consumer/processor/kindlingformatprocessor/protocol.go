@@ -48,6 +48,43 @@ func fillSpanDNSProtocolLabel(g *gauges) {
 	g.targetLabels.AddStringValue("dns.rcode", strconv.FormatInt(g.Labels.GetIntValue(constlabels.DnsRcode), 10))
 }
 
+func fillCommonProtocolLabelsV2(g *gauges, protocol ProtocolType, needProtocolDetail bool) {
+	switch protocol {
+	case http:
+		if needProtocolDetail {
+			fillEntityHttpProtocolLabelV2(g)
+		} else {
+			fillTopologyHttpProtocolLabel(g)
+		}
+	case dns:
+		if needProtocolDetail {
+			fillEntityDnsProtocolLabel(g)
+		} else {
+			fillTopologyDnsProtocolLabel(g)
+		}
+	case kafka:
+		if needProtocolDetail {
+			fillEntityKafkaProtocolLabel(g)
+		} else {
+			fillTopologyKafkaProtocolLabel(g)
+		}
+	case mysql:
+		if needProtocolDetail {
+			fillEntityMysqlProtocolLabel(g)
+		} else {
+			fillTopologyMysqlProtocolLabel(g)
+		}
+	case grpc:
+		if needProtocolDetail {
+			fillEntityHttpProtocolLabelV2(g)
+		} else {
+			fillTopologyHttpProtocolLabel(g)
+		}
+	default:
+		// Do nothing ?
+	}
+}
+
 func fillCommonProtocolLabels(g *gauges, protocol ProtocolType, isServer bool) {
 	switch protocol {
 	case http:
@@ -85,13 +122,22 @@ func fillCommonProtocolLabels(g *gauges, protocol ProtocolType, isServer bool) {
 	}
 }
 
+func httpStatusCodeToXX(statusCode int64) {
+	return
+}
+
+func fillEntityHttpProtocolLabelV2(g *gauges) {
+	g.targetLabels.AddStringValue(constlabels.HttpMethod, g.Labels.GetStringValue(constlabels.ContentKey))
+	g.targetLabels.AddStringValue(constlabels.HttpStatusCode, strconv.FormatInt(g.Labels.GetIntValue(constlabels.HttpStatusCode) / 100, 10) + "xx")
+}
+
 func fillEntityHttpProtocolLabel(g *gauges) {
 	g.targetLabels.AddStringValue(constlabels.RequestContent, g.Labels.GetStringValue(constlabels.ContentKey))
 	g.targetLabels.AddStringValue(constlabels.ResponseContent, strconv.FormatInt(g.Labels.GetIntValue(constlabels.HttpStatusCode), 10))
 }
 
 func fillTopologyHttpProtocolLabel(g *gauges) {
-	g.targetLabels.AddStringValue(constlabels.StatusCode, strconv.FormatInt(g.Labels.GetIntValue(constlabels.HttpStatusCode), 10))
+	g.targetLabels.AddStringValue(constlabels.StatusCode, strconv.FormatInt(g.Labels.GetIntValue(constlabels.HttpStatusCode) / 100, 10) + "xx")
 }
 
 func fillSpanHttpProtocolLabel(g *gauges) {
@@ -115,6 +161,16 @@ func fillTopologyDnsProtocolLabel(g *gauges) {
 	g.targetLabels.AddStringValue(constlabels.StatusCode, strconv.FormatInt(g.Labels.GetIntValue(constlabels.DnsRcode), 10))
 }
 
+func fillEntityRpcProtocolLabelV2(g *gauges) {
+	g.targetLabels.AddStringValue(constlabels.RpcMethod, g.Labels.GetStringValue(constlabels.RpcMethod))
+	g.targetLabels.AddStringValue(constlabels.RpcService, g.Labels.GetStringValue(constlabels.RpcMethod))
+}
+
+func fillEntityKafkaProtocolLabelV2(g *gauges) {
+	g.targetLabels.AddStringValue(constlabels.RequestContent, g.Labels.GetStringValue(constlabels.KafkaTopic))
+	g.targetLabels.AddStringValue(constlabels.ResponseContent, g.Labels.GetStringValue(constlabels.STR_EMPTY))
+}
+
 func fillEntityKafkaProtocolLabel(g *gauges) {
 	g.targetLabels.AddStringValue(constlabels.RequestContent, g.Labels.GetStringValue(constlabels.KafkaTopic))
 	g.targetLabels.AddStringValue(constlabels.ResponseContent, g.Labels.GetStringValue(constlabels.STR_EMPTY))
@@ -122,6 +178,11 @@ func fillEntityKafkaProtocolLabel(g *gauges) {
 
 func fillTopologyKafkaProtocolLabel(g *gauges) {
 	g.targetLabels.AddStringValue(constlabels.StatusCode, g.Labels.GetStringValue(constlabels.STR_EMPTY))
+}
+
+func fillEntityDatabaseProtocolLabelV2(g *gauges) {
+	g.targetLabels.AddStringValue(constlabels.DbStatement, g.Labels.GetStringValue(constlabels.ContentKey))
+	g.targetLabels.AddStringValue(constlabels.StatusCode, strconv.FormatInt(g.Labels.GetIntValue(constlabels.SqlErrCode), 10))
 }
 
 func fillEntityMysqlProtocolLabel(g *gauges) {
