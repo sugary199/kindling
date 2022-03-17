@@ -10,7 +10,6 @@ import (
 	"github.com/Kindling-project/kindling/collector/component"
 	"github.com/Kindling-project/kindling/collector/consumer"
 	"github.com/Kindling-project/kindling/collector/consumer/exporter/otelexporter"
-	"github.com/Kindling-project/kindling/collector/consumer/processor/armsformatprocessor"
 	"github.com/Kindling-project/kindling/collector/consumer/processor/k8sprocessor"
 	"github.com/Kindling-project/kindling/collector/consumer/processor/kindlingformatprocessor"
 	"github.com/Kindling-project/kindling/collector/consumer/processor/nodemetricprocessor"
@@ -76,7 +75,7 @@ func (a *Application) registerFactory() {
 	a.componentsFactory.RegisterAnalyzer(network.Network.String(), network.NewNetworkAnalyzer, &network.Config{})
 	a.componentsFactory.RegisterProcessor(k8sprocessor.K8sMetadata, k8sprocessor.NewKubernetesProcessor, &k8sprocessor.Config{})
 	a.componentsFactory.RegisterProcessor(kindlingformatprocessor.ProcessorName, kindlingformatprocessor.NewRelabelProcessor, &kindlingformatprocessor.Config{})
-	a.componentsFactory.RegisterProcessor(armsformatprocessor.ProcessorName, armsformatprocessor.NewArmsFormatProcessor, &armsformatprocessor.Config{})
+	//a.componentsFactory.RegisterProcessor(armsformatprocessor.ProcessorName, armsformatprocessor.NewArmsFormatProcessor, &armsformatprocessor.Config{})
 	a.componentsFactory.RegisterExporter(otelexporter.Otel, otelexporter.NewExporter, &otelexporter.Config{})
 	a.componentsFactory.RegisterAnalyzer(tcpmetricanalyzer.TcpMetric.String(), tcpmetricanalyzer.NewTcpMetricAnalyzer, &tcpmetricanalyzer.Config{})
 	a.componentsFactory.RegisterAnalyzer(uprobeanalyzer.UprobeType.String(), uprobeanalyzer.NewUprobeAnalyzer, &uprobeanalyzer.Config{})
@@ -109,9 +108,8 @@ func (a *Application) buildPipeline() error {
 	formatProcessor := formatProcessorFactory.NewFunc(formatProcessorFactory.Config, a.telemetry.Telemetry, otelExporter)
 
 	// @qianlu.kk use kindling format or arms format
-	armsFormatProcessorFactory := a.componentsFactory.Processors[armsformatprocessor.ProcessorName]
-	formatProcessorFactory.NewFunc(armsFormatProcessorFactory.Config, a.telemetry.Telemetry, otelExporter)
-
+	//armsFormatProcessorFactory := a.componentsFactory.Processors[armsformatprocessor.ProcessorName]
+	//formatProcessorFactory.NewFunc(armsFormatProcessorFactory.Config, a.telemetry.Telemetry, otelExporter)
 
 	// 2. Kubernetes metadata processor
 	k8sProcessorFactory := a.componentsFactory.Processors[k8sprocessor.K8sMetadata]
