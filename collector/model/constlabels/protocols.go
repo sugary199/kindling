@@ -35,6 +35,7 @@ const (
 
 	HttpMethod = "httpMethod"
 	HttpStatusCode = "HttpStatusCode"
+	ArmsHttpStatusCode = "httpStatusCode"
 
 	// -- RPC dimensions --
 

@@ -122,13 +122,9 @@ func fillCommonProtocolLabels(g *gauges, protocol ProtocolType, isServer bool) {
 	}
 }
 
-func httpStatusCodeToXX(statusCode int64) {
-	return
-}
-
 func fillEntityHttpProtocolLabelV2(g *gauges) {
 	g.targetLabels.AddStringValue(constlabels.HttpMethod, g.Labels.GetStringValue(constlabels.ContentKey))
-	g.targetLabels.AddStringValue(constlabels.HttpStatusCode, strconv.FormatInt(g.Labels.GetIntValue(constlabels.HttpStatusCode) / 100, 10) + "xx")
+	g.targetLabels.AddStringValue(constlabels.ArmsHttpStatusCode, strconv.FormatInt(g.Labels.GetIntValue(constlabels.HttpStatusCode) / 100, 10) + "xx")
 }
 
 func fillEntityHttpProtocolLabel(g *gauges) {
