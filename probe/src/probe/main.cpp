@@ -21,6 +21,8 @@
 #include <prometheus/exposer.h>
 #include <prometheus/registry.h>
 
+#include "src/probe/version.h"
+
 DEFINE_bool(enable_stirling, false, "If true, pixie stirling module is enabled.");
 DEFINE_int32(port, 9112, "The port to export prometheus metrics.");
 DEFINE_int32(sysdig_snaplen, 80, "The len of one sysdig event");
@@ -128,6 +130,7 @@ int main(int argc, char** argv) {
 
     LOG(INFO) << "Start kindling probe...";
     LOG(INFO) << "KINDLING_PROBE_VERSION: " << KINDLING_PROBE_VERSION;
+    LOG(INFO) << "KINDLING_PROBE_VERSION: " <<_VERSION_;
     TerminationHandler::InstallSignalHandlers();
     try {
         inspector = new sinsp();
